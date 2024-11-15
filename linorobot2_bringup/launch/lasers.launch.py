@@ -34,10 +34,10 @@ def launch_rplidar(context, *args, **kwargs):
     ]
     
     if lidar_str in rplidar_sensors:
-        launch_file = f'sllidar_{lidar_str}_launch.py'
+        launch_file = 'sllidar_a2m12_launch.py'
         return [IncludeLaunchDescription(
             PythonLaunchDescriptionSource(PathJoinSubstitution(
-                [FindPackageShare('sllidar_ros2'), 'launch', launch_file]
+                [FindPackageShare('sllidar_ros2'), 'launch', 'sllidar_a2m12_launch .py']
             )),
             launch_arguments={
                 'serial_port': '/dev/rplidar', 
