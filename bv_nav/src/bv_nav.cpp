@@ -94,8 +94,8 @@ public:
 
         button.X = msg.data[0];
         button.CIRCLE = msg.data[1];
-        button.SQUARE = msg.data[3];
         button.TRIANGLE = msg.data[2];
+        button.SQUARE = msg.data[3];
         button.L1 = msg.data[4];
         button.R1 = msg.data[5];
         button.L2 = msg.data[6];

@@ -16,7 +16,8 @@ class GamePad(Node):
         self.publisher_hats = self.create_publisher(Int32MultiArray, 'hats', 10)
         self.publisher_R1 = self.create_publisher(Int32, 'button_R1' , 10)
         self.publisher_L1 = self.create_publisher(Int32, 'button_L1', 10)
-        self.publishser_triangle = self.create_publisher(Int32, 'button_triangle', 10)
+        self.publisher_Triangle = self.create_publisher(Int32,'button_triangle',10)
+        self.publisher_Option = self.create_publisher(Int32, 'button_option', 10)
        
         
         # Inisialisasi pygame
@@ -38,7 +39,8 @@ class GamePad(Node):
         self.create_timer(0.1, self.button_callback)
         self.create_timer(0.1, self.micro_callback)
         self.create_timer(0.1, self.micro2_callback)
-        # self.create_timer(0.1, self.tr_callback )
+        self.create_timer(0.1, self.frame_callback )
+        self.create_timer(0.1, self.options_callback)
     
     def connect_joystick(self):
         """Attempts to connect to the joystick. Retries if not available."""
@@ -155,6 +157,30 @@ class GamePad(Node):
         self.get_logger().info(f"L1: {msg_L1.data}")
 
         self.publisher_L1.publish(msg_L1)
+
+
+    def frame_callback(self):
+        pygame.event.pump()
+
+        msg_Tring = Int32()
+
+        msg_Tring.data = self.joystick.get_button(2)
+
+        self.get_logger().info(f"triangle: {msg_Tring.data}")
+        
+        self.publisher_Triangle.publish(msg_Tring)
+
+    def options_callback(self):
+        pygame.event.pump()
+
+        msg_option = Int32()
+
+        msg_option.data = self.joystick.get_button(9)
+
+        self.get_logger().info(f"option : {msg_option.data}")
+
+        self.publisher_Option.publish(msg_option)
+
 
 def main(args=None):
     rclpy.init(args=args)
