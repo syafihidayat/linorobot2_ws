@@ -49,6 +49,9 @@ def generate_launch_description():
     extra_launch_path = PathJoinSubstitution(
         [FindPackageShare('linorobot2_bringup'), 'launch', 'extra.launch.py']
     )
+    twist_mux_params = PathJoinSubstitution(
+        [FindPackageShare('linorobot2_navigation'), 'config', 'twist_mux.yaml']
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -116,6 +119,15 @@ def generate_launch_description():
             ]
         ),
 
+        # Node(
+        #     package='twist_mux',
+        #     executable='twist_mux',
+        #     name='twist_mux',
+        #     parameters='/home/m/linorobot2_ws/src/linorobot2/linorobot2_navigation/config/twist_mux.yaml',
+        #     remappings=[
+        #         ('cmd_vel_out','mecha_cont/cmd_vel')
+        #     ]
+        # ),
         Node(
             package='robot_localization',
             executable='ekf_node',

@@ -1,0 +1,9 @@
+<class_libraries>
+    <library path="fi_controller">
+        <class type = "fi_pure_pursuit::Fi_pure_pursuit" base_class_type = "nav2_core::Controller">
+            <description>
+                fi_pure_pursuit_controller
+            </description>
+        </class>
+    </library>
+</class_libraries>

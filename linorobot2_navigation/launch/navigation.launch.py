@@ -96,5 +96,11 @@ def generate_launch_description():
             arguments=['-d', rviz_config_path],
             condition=IfCondition(LaunchConfiguration("rviz")),
             parameters=[{'use_sim_time': LaunchConfiguration("sim")}]
+        ),
+         Node(
+            package = 'bv_nav',
+            executable = 'bv_nav',
+            name = 'bv_nav',
+            output = 'screen',
         )
     ])
