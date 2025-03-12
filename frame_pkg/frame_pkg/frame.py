@@ -23,16 +23,16 @@ class semiauto(Node):
         # self.minDistance , self.maxDistance = 200, 1500
         # self.threshold_value = 255
 
-        # # Rentang HSV untuk warna merah
+        # warna merah
         self.lowhue_red1, self.smin_red1, self.vmin_red1 = 0, 100, 100
         self.upperhue_red1, self.smax_red1, self.vmax_red1 = 3, 255, 255
-# 
+ 
         self.lowhue_red2, self.smin_red2, self.vmin_red2 = 173, 93, 93
         self.upperhue_red2, self.smax_red2, self.vmax_red2 = 180, 255, 255
-# 
+
         self.minDistance, self.maxDistance = 200, 1500
 
-
+        # warna biru
         # self.lowhue_blue1, self.smin_blue1,self.vmin_blue1 = 100 , 161 , 38
         # self.upperhue_blue1, self.smax_blue1, self.vmax_blue1 = 122 ,255 , 255
 
@@ -53,7 +53,10 @@ class semiauto(Node):
         self.button2_pressed = False
         self.button9_pressed = False
         self.frame_proses = True 
-      
+        # self.robot_y = 0
+        # self.robot_x = 0
+        
+        
         
         self.bounding_box_publisher = self.create_publisher(Int32MultiArray, 'bounding_box_center', 10)
         self.publisher_auto = self.create_publisher(Twist,'cmd_vel_defense',10)
@@ -165,6 +168,7 @@ class semiauto(Node):
 
             contours = contours[:2] if len(contours) >= 2 else contours
 
+
         for i,contour in enumerate(contours):
         # for contour in contours:
             area = cv2.contourArea(contour)
@@ -176,36 +180,27 @@ class semiauto(Node):
                 center = (x + w // 2, y + h // 2)
                 cv2.circle(frame, center, 3, (255, 255, 255), -1)
 
-                dist = depth[center[1], center[0]]
+
+                if 0 <= center[1] < depth.shape[0] and 0 <= center[0] < depth.shape[1]:
+                    dist = depth[center[1], center[0]]
                 
-                label = f"object {i+1} - Area: {int(area)}"
-                cv2.putText(frame,label,(x,y -10), cv2.FONT_HERSHEY_SIMPLEX, 0.6,(0,255,0), 2 )
+                    label = f"object {i+1} - Area: {int(area)}"
+                    cv2.putText(frame,label,(x,y -10), cv2.FONT_HERSHEY_SIMPLEX, 0.6,(0,255,0), 2 )
 
-            # if i+1 == self.target_object:
-            #     msg = Int32MultiArray()
-            #     msg.data = [i+1, int(center[0]),int(center[1]),int(dist)]
-            #     self.bounding_box1_publisher.publish(msg)
+                    if i+1 == 1:
+                        msg = Int32MultiArray()
+                        msg.data = [int(center[0]),int(center[1]),int(dist)]
+                        self.bounding_box1_publisher.publish(msg)
 
-            # # if i+1 == self.target_object:  
-            #     msg = Int32MultiArray()
-            #     msg.data = [i+1 ,int(center[0]),int(center[1]),int(dist)]
-            #     self.bounding_box2_publisher.publish(msg)
+                    if i+1 == 2:  
+                        msg = Int32MultiArray()
+                        msg.data = [int(center[0]),int(center[1]),int(dist)]
+                        self.bounding_box2_publisher.publish(msg)
 
-
-            if i+1 == self.target_object:
-                msg = Int32MultiArray()
-                msg.data = [int(center[0]),int(center[1]), int (dist)]
-                self.bounding_box_publisher.publish(msg)
-
-
-        # if len(contours) >= 2:
-        #     self.get_logger().info(f'2 object detected')
-        # elif len(contours) == 1:
-        #     self.get_logger().info(f'only 1 object detected ')
-        # else:
-        #     self.get_logger().info(f'object no detected ')
-
-
+                    if i+1 == self.target_object:
+                        msg = Int32MultiArray()
+                        msg.data = [int(center[0]),int(center[1]), int (dist)]
+                        self.bounding_box_publisher.publish(msg)
 
         cv2.imshow("Combined Mask", combined_mask)
         cv2.imshow("Frame", frame)
@@ -233,14 +228,10 @@ class semiauto(Node):
 
             if self.target_object == 1:
                 self.target_object = 2
-                self.target_x , self.target_y = 0,0
-                self.robot_x , self.robot_y = self.bounding_box_center
-                # self.get_logger().info(f'switch to object 2')
+                self.get_logger().info(f'switch to object 2')
             else:
                 self.target_object = 1
-                self.target_x ,self.target_y = 0,0
-                self.robot_x, self.robot_y = self.bounding_box_center
-                # self.get_logger().info(f'switch to object 1')
+                self.get_logger().info(f'switch to object 1')           
 
         elif msg.data == 0 and self.button9_pressed:
             self.button9_pressed = False
@@ -248,17 +239,22 @@ class semiauto(Node):
         
     def toDeg(self, radian):
         return radian * 180 / math.pi
-
-   
-        
+       
     def target_callback(self, msg):
 
         if self.bounding_box_center is None:
 
-                self.get_logger().warn("bounding box not detected yet!!")
+            self.get_logger().warn("bounding box not detected yet!!")
                 
-                return
-        
+            return
+
+
+        if self.target_object == 1 and self.bounding_box_object1 is not None:
+            self.robot_x, self.robot_y = self.bounding_box_object1
+        elif self.target_object == 2 and self.bounding_box_object2 is not None:
+            self.robot_x , self.robot_y = self.bounding_box_object2
+
+
         quaternion = (
 
             msg.pose.pose.orientation.x,
@@ -268,9 +264,10 @@ class semiauto(Node):
         )
         _,_,yaw = euler_from_quaternion(quaternion)
         self.target_x, self.target_y = 0,0
-        self.robot_x ,self.robot_y = self.bounding_box_center
+        # self.robot_x ,self.robot_y = self.bounding_box_center
         new_x_pose_frame = (self.robot_y - 240) 
         new_y_pose_frame = (self.robot_x - 320) * -1
+      
 
         self.error_x = self.target_x - new_x_pose_frame 
         self.error_y = self.target_y - new_y_pose_frame
@@ -286,8 +283,6 @@ class semiauto(Node):
         desired_linear_vel = 3.0
         desired_angular_vel = 3.0
 
-        # controlled_distance = PID.controlling(self.error_distance,desired_linear_vel)
-        # controlled_angle = pid.control_base(self.error_theta, desired_angular_vel, mode="angular")
 
         controlled_distance = pid.controlling(self.error_distance,desired_linear_vel)
         controlled_angle = pid.control_base(self.error_theta,desired_angular_vel)
@@ -296,8 +291,9 @@ class semiauto(Node):
         twist.linear.x = controlled_distance * math.cos(self.error_angle)
         twist.linear.y = controlled_distance * math.sin(self.error_angle)
         twist.angular.z = controlled_angle
-        # self.get_logger().info(f"🚀 Sending cmd_vel_defense: Linear (x={twist.linear.x}, y={twist.linear.y}), Angular={twist.angular.z}")
-        self.get_logger().info(f"\n pos_x:{new_x_pose_frame}\n pos_y:{new_y_pose_frame}\nposangle:{self.toDeg(yaw)}\n out_X:{twist.linear.x}\n out_y:{twist.linear.y}\nout_angle:{twist.angular.z}\n error_x{self.error_x}\n error_y:{self.error_y}\nerror_angle:{self.error_angle}\nreturn linear:{pid.u}\nreturn angular:{pid.uT}\nobjeck ke :{self.target_object}")
+        self.get_logger().info(f"\n pos_x:{new_x_pose_frame}\n pos_y:{new_y_pose_frame}\nposangle:{self.toDeg(yaw)}\n error_x{self.robot_x}\n error_y:{self.robot_y}\nerror_angle:{self.error_angle}\nreturn linear:{pid.u}\nreturn angular:{pid.uT}\nobjeck ke :{self.target_object}")
+        # self.get_logger().info(f"\n error_x{self.robot_x}\n error_y:{self.robot_y}\nobjeck ke :{self.target_object}")
+        # self.get_logger().info(f"\n pos_x:{new_x_pose_frame}\n pos_y:{new_y_pose_frame}\nposangle:{self.toDeg(yaw)}\n out_X:{twist.linear.x}\n out_y:{twist.linear.y}\nout_angle:{twist.angular.z}\n error_x{self.error_x}\n error_y:{self.error_y}\nerror_angle:{self.error_angle}\nreturn linear:{pid.u}\nreturn angular:{pid.uT}\nobjeck ke :{self.target_object}")
 
         self.publisher_auto.publish(twist)
 
