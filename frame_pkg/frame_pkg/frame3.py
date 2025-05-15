@@ -9,9 +9,12 @@ import rclpy
 from std_msgs.msg import Int32MultiArray
 from std_msgs.msg import Int32
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Image
+from geometry_msgs.msg import Point
 import math
 from tf_transformations import euler_from_quaternion
 import time
+import cv_bridge
 
             
 class semiauto(Node):
@@ -44,7 +47,7 @@ class semiauto(Node):
         self.bounding_box_center = None
         self.bounding_box_object1 = None
         self.bounding_box_object2 = None
-        self.yoloObject = None
+        self.coordinate_object = None
         self.error_x = 0
         self.error_y = 0
         self.error_theta = 0
@@ -63,7 +66,9 @@ class semiauto(Node):
         self.publisher_auto = self.create_publisher(Twist,'cmd_vel_defense',10)
         self.bounding_box1_publisher = self.create_publisher(Int32MultiArray,'bounding_box_object1',10)
         self.bounding_box2_publisher = self.create_publisher(Int32MultiArray,'bounding_box_object2',10)
-        self.bounding_yolo_publisher = self.create_publisher(Int32MultiArray, 'yoloObject', 10)
+        self.publish_image = self.create_publisher(Image, 'camera/image_raw' , 10)
+        self.bridge = cv_bridge.CvBridge()
+        # self.bounding_yolo_publisher = self.create_publisher(Int32MultiArray, 'yoloObject', 10)
 
 
         self.subscription_auto = self.create_subscription(Odometry,'odom',self.target_callback,10)
@@ -72,7 +77,7 @@ class semiauto(Node):
         self.subscription_bounding_object2 = self.create_subscription(Int32MultiArray,'bounding_box_object2' , self.object2_callback,  10)
         self.subscription_frame = self.create_subscription(Int32, 'button_triangle' , self.frames_callback , 10)
         self.subscription_Options = self.create_subscription(Int32, 'button_option' , self.OPtion_callback , 10)
-        self.subscription_koordinat = self.create_subscription(Int32, 'coordinate_object', self.koor_callback, 10)
+        self.subscription_koordinat = self.create_subscription(Point, 'coordinate_object', self.koordinat_callback, 10)
 
         self.pipeline = rs.pipeline()
         self.config = rs.config()
@@ -118,9 +123,14 @@ class semiauto(Node):
             if not color_frame or not depth_frame:
                 return
 
+            color_image = np.asanyarray(color_frame.get_data())
             depth = np.asanyarray(depth_frame.get_data())
             frame = np.asanyarray(color_frame.get_data())
             self.process_frame(frame, depth)
+
+            image_msg = self.bridge.cv2_to_imgmsg(color_image,encoding='bgr8')
+
+            self.publish_image.publish(image_msg)
 
         except Exception as e:
             self.get_logger().error(f"error:{e}")
@@ -186,8 +196,8 @@ class semiauto(Node):
                 if 0 <= center[1] < depth.shape[0] and 0 <= center[0] < depth.shape[1]:
                     dist = depth[center[1], center[0]]
                 
-                    label = f"object {i+1} - Area: {int(area)}"
-                    cv2.putText(frame,label,(x,y -10), cv2.FONT_HERSHEY_SIMPLEX, 0.6,(0,255,0), 2 )
+                    # label = f"object {i+1} - Area: {int(area)}"
+                    # cv2.putText(frame,label,(x,y -10), cv2.FONT_HERSHEY_SIMPLEX, 0.6,(0,255,0), 2 )
 
                     if i+1 == 1:
                         msg = Int32MultiArray()
@@ -238,9 +248,9 @@ class semiauto(Node):
         elif msg.data == 0 and self.button9_pressed:
             self.button9_pressed = False
 
-    def koor_callback(self, msg):
-        if msg.data:
-            self.coordinate_objeck = [msg.data[0], msg.data[1], msg.data[2]]
+    def koordinat_callback(self, msg):
+    
+            self.coordinate_object = [msg.x, msg.y, msg.z]
         
     def toDeg(self, radian):
         return radian * 180 / math.pi
@@ -253,12 +263,35 @@ class semiauto(Node):
                 
             return
 
+        if self.coordinate_object is None:
 
-        if self.target_object == 1 and self.bounding_box_object1 is not None:
-            self.robot_x, self.robot_y = self.bounding_box_object1
-        elif self.target_object == 2 and self.bounding_box_object2 is not None:
-            self.robot_x , self.robot_y = self.bounding_box_object2
+            self.get_logger().warn("koordinat / object yolo not detectd yet!")
 
+            return
+        
+        x1, y1 ,z1 = self.coordinate_object
+        x2, y2 = self.bounding_box_center
+
+        Jarak = ((x1 - x2) ** 2 + (y1-y2) ** 2) **0.5 
+
+        self.get_logger().info(f"[DEBUG] Jarak: {Jarak}, coordinate_object: {self.coordinate_object}, bounding_box_center: {self.bounding_box_center}")
+
+        if Jarak > 370:
+            self.get_logger().info("YOLO object and red color not macthing")
+
+            return
+
+        self.target_object = 1
+
+        new_y_pose_frame = y2 - 240
+        new_x_pose_frame = (x2 - 360) * -1
+        self.robot_x = new_x_pose_frame
+        self.robot_y = new_y_pose_frame
+
+
+        self.target_y = (y1 - 240) * -1
+
+        self.target_x = (x1 - 320) 
 
         quaternion = (
 
@@ -268,14 +301,16 @@ class semiauto(Node):
             msg.pose.pose.orientation.w
         )
         _,_,yaw = euler_from_quaternion(quaternion)
-        self.target_x, self.target_y = 0,0
+        # self.target_x, self.target_y = 0,0
         # self.robot_x ,self.robot_y = self.bounding_box_center
-        new_x_pose_frame = (self.robot_y - 240) 
-        new_y_pose_frame = (self.robot_x - 320) * -1
+        # new_x_pose_frame = (self.robot_y - 240) 
+        # new_y_pose_frame = (self.robot_x - 320) * -1
       
 
-        self.error_x = self.target_x - new_x_pose_frame 
-        self.error_y = self.target_y - new_y_pose_frame
+        # self.error_x = self.target_x - new_x_pose_frame 
+        # self.error_y = self.target_y - new_y_pose_frame
+        self.error_x = self.target_x - self.robot_x 
+        self.error_y = self.target_y - self.robot_y
         self.error_theta = 0 - self.toDeg(yaw)
         
         self.error_distance = sqrt(pow(self.error_x,2) + pow(self.error_y,2))
@@ -285,9 +320,11 @@ class semiauto(Node):
         pid.set_base_params(0.005,0,0)
         pid.set_heading_params(0.1,0.0003,0)
 
-        desired_linear_vel = 3.0
-        desired_angular_vel = 3.0
+        desired_linear_vel = 0.5
+        desired_angular_vel = 0.5
 
+        # desired_linear_vel = 3.0
+        # desired_angular_vel = 3.0
 
         controlled_distance = pid.controlling(self.error_distance,desired_linear_vel)
         controlled_angle = pid.control_base(self.error_theta,desired_angular_vel)
@@ -296,9 +333,14 @@ class semiauto(Node):
         twist.linear.x = controlled_distance * math.cos(self.error_angle)
         twist.linear.y = controlled_distance * math.sin(self.error_angle)
         twist.angular.z = controlled_angle
-        self.get_logger().info(f"\n pos_x:{new_x_pose_frame}\n pos_y:{new_y_pose_frame}\nposangle:{self.toDeg(yaw)}\n error_x{self.robot_x}\n error_y:{self.robot_y}\nerror_angle:{self.error_angle}\nreturn linear:{pid.u}\nreturn angular:{pid.uT}\nobjeck ke :{self.target_object}")
+        self.get_logger().info(f"\n pos_x:{new_x_pose_frame}\n pos_y:{new_y_pose_frame}\nposangle:{self.toDeg(yaw)}\n error_x{self.robot_x}\n error_y:{self.robot_y}\nerror_angle:{self.error_angle}\nreturn linear:{pid.u}\nreturn angular:{pid.uT}\nobjeck ke :{self.target_object}\nConfidence : {z1}\njarakPixel : {Jarak}\ncoordinate object :{self.coordinate_object}\nbounding box center : {self.bounding_box_center}")
         # self.get_logger().info(f"\n error_x{self.robot_x}\n error_y:{self.robot_y}\nobjeck ke :{self.target_object}")
         # self.get_logger().info(f"\n pos_x:{new_x_pose_frame}\n pos_y:{new_y_pose_frame}\nposangle:{self.toDeg(yaw)}\n out_X:{twist.linear.x}\n out_y:{twist.linear.y}\nout_angle:{twist.angular.z}\n error_x{self.error_x}\n error_y:{self.error_y}\nerror_angle:{self.error_angle}\nreturn linear:{pid.u}\nreturn angular:{pid.uT}\nobjeck ke :{self.target_object}")
+
+        # f"\nPos X: {new_x_pose_frame}\nPos Y: {new_y_pose_frame}\n"
+        # f"Yaw: {self.toDeg(yaw)}\nError X: {self.error_x}\nError Y: {self.error_y}\n"
+        # f"Error Angle: {self.error_angle}\nLinear: {pid.u}\nAngular: {pid.uT}\n"
+        # f"Target Object: {self.target_object}\nConfidance: {z1}"
 
         self.publisher_auto.publish(twist)
 
